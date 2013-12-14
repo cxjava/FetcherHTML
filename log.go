@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/astaxie/beego/logs"
 	"strings"
+
+	"github.com/astaxie/beego/logs"
 )
 
 // Log levels to control the logging output.

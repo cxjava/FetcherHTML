@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -9,7 +10,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-type Config struct {
+type config struct {
 	ThemesUrl  string
 	Proxy      bool
 	ProxyURL   string
@@ -19,7 +20,7 @@ type Config struct {
 }
 
 var (
-	conf   Config
+	conf   config
 	client = &http.Client{}
 )
 
@@ -35,10 +36,10 @@ func SetLogInfo() {
 func ReadConfig() {
 	//读取配置文件
 	if _, err := toml.DecodeFile("config.ini", &conf); err != nil {
+		fmt.Println("配置文件错误:", err)
 		Error(err)
 		return
 	}
-
 	//再次设置日志级别
 	SetLevel(conf.LogLevel)
 
@@ -68,9 +69,10 @@ func AddReqestHeader(request *http.Request) {
 
 //获取响应
 func GetResponse(targetUrl string) (resp *http.Response, err error) {
+	Info("GetResponse:", targetUrl)
 	req, err := http.NewRequest("GET", targetUrl, nil)
 	if err != nil {
-		Error(targetUrl, err)
+		Error("GetResponse:", targetUrl, err)
 		return
 	}
 	AddReqestHeader(req)
@@ -78,7 +80,7 @@ func GetResponse(targetUrl string) (resp *http.Response, err error) {
 }
 
 //获取内容
-func getResponseBody(resp *http.Response) string {
+func GetResponseBody(resp *http.Response) string {
 	var body []byte
 	switch resp.Header.Get("Content-Encoding") {
 	case "gzip":
