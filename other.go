@@ -61,7 +61,7 @@ func ReadConfig() {
 	if err != nil {
 		Error("Parse(conf.ThemesUrl):", err)
 	}
-	conf.SaveFolder = u.Host
+	conf.SaveFolder = conf.SaveFolder + u.Host + "/"
 }
 
 //添加消息头

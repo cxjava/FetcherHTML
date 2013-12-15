@@ -101,8 +101,8 @@ func saveFile(fileName string) (content string) {
 // 保存图片
 func DownImg(imageURL string) {
 	defer func() {
-		<-imageChannel
-		wg.Done()
+		//<-imageChannel
+		//wg.Done()
 	}()
 	if strings.Contains(imageURL, "?") {
 		imageURL = imageURL[:strings.LastIndex(imageURL, "?")]
@@ -168,9 +168,9 @@ func SaveImageFileFromCSS(cssUrl, cssContent string) {
 			savePath := path.Join(cssPath, img)
 			Info("SaveImageFileFromCSS savePath:", savePath)
 			// 保存文件
-			wg.Add(1)
-			imageChannel <- 1
-			go DownImg(savePath)
+			//wg.Add(1)
+			//imageChannel <- 1
+			DownImg(savePath)
 		} else {
 			Error("Special SaveImageFileFromCSS link:", cssUrl)
 		}
@@ -203,7 +203,7 @@ func saveHtmlDoc(doc *goquery.Document) {
 			Info("save js file:", scriptUrl)
 			//wg.Add(1)
 			//imageChannel <- 1
-			go saveFile(scriptUrl)
+			saveFile(scriptUrl)
 		} else {
 			Error("special scriptUrl link:", scriptUrl)
 		}
@@ -213,9 +213,9 @@ func saveHtmlDoc(doc *goquery.Document) {
 		imgUrl, _ := s.Attr("src")
 		// 保存文件
 		Info("save image file:", imgUrl)
-		wg.Add(1)
-		imageChannel <- 1
-		go DownImg(imgUrl)
+		//wg.Add(1)
+		//imageChannel <- 1
+		DownImg(imgUrl)
 	})
 }
 
@@ -226,7 +226,7 @@ func main() {
 
 	//读取配置文件,并设置
 	ReadConfig()
-
+	Info(conf.SaveFolder)
 	//清空空的文件夹和文件
 	//DeleteEmptyFile(conf.SaveFolder)
 	Info("start!")
