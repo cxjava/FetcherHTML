@@ -47,7 +47,7 @@ func ReadConfig() {
 	if conf.Proxy {
 		pr, err := url.Parse(conf.ProxyURL)
 		if err != nil {
-			Error(err)
+			Error("url.Parse(conf.ProxyURL):", err)
 			return
 		}
 		client = &http.Client{
@@ -56,6 +56,12 @@ func ReadConfig() {
 			},
 		}
 	}
+
+	u, err := url.Parse(conf.ThemesUrl)
+	if err != nil {
+		Error("Parse(conf.ThemesUrl):", err)
+	}
+	conf.SaveFolder = u.Host
 }
 
 //添加消息头
@@ -69,7 +75,7 @@ func AddReqestHeader(request *http.Request) {
 
 //获取响应
 func GetResponse(targetUrl string) (resp *http.Response, err error) {
-	Info("GetResponse:", targetUrl)
+	Debug("GetResponse:", targetUrl)
 	req, err := http.NewRequest("GET", targetUrl, nil)
 	if err != nil {
 		Error("GetResponse:", targetUrl, err)

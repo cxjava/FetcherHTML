@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -29,12 +30,11 @@ func NewDoc(tagertUrl string) (doc *goquery.Document, e error) {
 		}
 		defer func() {
 			resp.Body.Close()
-			Info("new Doc down!")
 		}()
 		if resp.StatusCode == http.StatusOK {
 			return goquery.NewDocumentFromResponse(resp)
 		} else {
-			Warn("NewDoc Error Status Code :", resp.StatusCode, tagertUrl)
+			Error("NewDoc Error Status Code :", resp.StatusCode, tagertUrl)
 		}
 	}
 	return goquery.NewDocument(tagertUrl)
@@ -46,9 +46,23 @@ func saveFile(fileName string) (content string) {
 		fileName = fileName[:strings.LastIndex(fileName, "?")]
 	}
 	//拼接保存的路径
-	savePath := path.Join(conf.SaveFolder, fileName)
+	savePath := path.Join(path.Dir(conf.SaveFolder), fileName)
 	// 已存在就不保存
 	if FileExists(savePath) {
+		Info("save file exists:", savePath)
+		file, err := os.Open(savePath)
+		if err != nil {
+			Error("FileExists :", err)
+			return ""
+		}
+		defer file.Close()
+		buf := bufio.NewReader(file)
+		bodyByte, err := ioutil.ReadAll(buf)
+		if err != nil {
+			Error("FileExists :", err)
+			return ""
+		}
+		content = string(bodyByte)
 		return
 	}
 	Info("save file:", savePath)
@@ -79,7 +93,7 @@ func saveFile(fileName string) (content string) {
 		content = string(body)
 		Debug("saveFile content:", content)
 	} else {
-		Warn("saveFile resp Status Code :", resp.StatusCode, savePath)
+		Error("saveFile failed Status Code :", resp.StatusCode, savePath)
 	}
 	return
 }
@@ -87,8 +101,8 @@ func saveFile(fileName string) (content string) {
 // 保存图片
 func DownImg(imageURL string) {
 	defer func() {
-		//<-imageChannel
-		//wg.Done()
+		<-imageChannel
+		wg.Done()
 	}()
 	if strings.Contains(imageURL, "?") {
 		imageURL = imageURL[:strings.LastIndex(imageURL, "?")]
@@ -97,14 +111,14 @@ func DownImg(imageURL string) {
 	savePath := path.Join(path.Dir(conf.SaveFolder), imageURL)
 	// 已存在就不保存
 	if FileExists(savePath) {
+		Info("save image exists:", savePath)
 		return
 	}
-	Info("save file:", savePath)
+	Info("save image:", savePath)
 	//新建保存的文件夹
 	if strings.Contains(savePath, "/") {
 		os.MkdirAll(savePath[:strings.LastIndex(savePath, "/")], 0775)
 	}
-
 	//抓取
 	resp, err := GetResponse(conf.ThemesUrl + imageURL)
 	if err != nil {
@@ -126,24 +140,21 @@ func DownImg(imageURL string) {
 		defer fout.Close()
 		fout.Write(body)
 	} else {
-		Warn("getImg resp Status Code :", resp.StatusCode, imageURL)
+		Error("DownImg resp Status Code :", resp.StatusCode, imageURL)
 	}
 }
 
-// 保存css文件中所引用的图片
+// 保存css文件中所引用的图片,或者字体
 func SaveImageFileFromCSS(cssUrl, cssContent string) {
-
 	re, _ := regexp.Compile("url\\((.*?)\\)")
 	all := re.FindAllString(cssContent, -1)
 	for _, img := range all {
-		Info("SaveImageFileFromCSS begin:", img)
+		Debug("SaveImageFileFromCSS begin:", img)
 		if strings.Contains(img, ".") && !strings.Contains(img, "http") {
 			// 提取url
-			Info("SaveImageFileFromCSS img:", img)
 			img = strings.Replace(strings.Replace(img, "'", "", -1), "\"", "", -1)
-			Info("SaveImageFileFromCSSaaa:", img)
 			img = img[4:strings.Index(img, ")")]
-			Info("SaveImageFileFromCSSbbb:", img)
+			Info("SaveImageFileFromCSS image:", img)
 			//移除不需要的后缀
 			if strings.Contains(img, "?") {
 				img = img[:strings.Index(img, "?")]
@@ -152,15 +163,16 @@ func SaveImageFileFromCSS(cssUrl, cssContent string) {
 				img = img[:strings.Index(img, "#")]
 			}
 			cssPath := cssUrl[:strings.LastIndex(cssUrl, "/")]
-			Info("SaveImageFileFromCSScssPath:", cssPath)
-			Info("SaveImageFileFromCSSimgPath:", img)
+			Info("SaveImageFileFromCSS cssPath:", cssPath)
 			//拼接保存的路径
 			savePath := path.Join(cssPath, img)
-			Info("SaveImageFileFromCSS:", savePath)
+			Info("SaveImageFileFromCSS savePath:", savePath)
 			// 保存文件
-			//wg.Add(1)
-			//imageChannel <- 1
+			wg.Add(1)
+			imageChannel <- 1
 			go DownImg(savePath)
+		} else {
+			Error("Special SaveImageFileFromCSS link:", cssUrl)
 		}
 	}
 }
@@ -168,12 +180,11 @@ func SaveImageFileFromCSS(cssUrl, cssContent string) {
 // 保存网页中引用的js和css等文件
 func saveHtmlDoc(doc *goquery.Document) {
 	// 解析引用的css
-	Info("saveHtmlDoc doc:", doc)
 	doc.Find("link").Each(func(i int, s *goquery.Selection) {
 		cssUrl, _ := s.Attr("href")
 		if !strings.HasPrefix(cssUrl, "http://") && !FileExists(cssUrl) {
 			// 保存css文件
-			Info(i, "save css file:", cssUrl)
+			Info("save css file:", cssUrl)
 			//wg.Add(1)
 			//imageChannel <- 1
 			cssContent := saveFile(cssUrl)
@@ -181,35 +192,31 @@ func saveHtmlDoc(doc *goquery.Document) {
 			//保存css里面的图片
 			SaveImageFileFromCSS(cssUrl, cssContent)
 		} else {
-			Warn(i, "special cssUrl link:", cssUrl)
+			Error("Special cssUrl link:", cssUrl)
 		}
 	})
-	Info("all link")
 	// 解析引用的js
 	doc.Find("script[src]").Each(func(i int, s *goquery.Selection) {
 		scriptUrl, _ := s.Attr("src")
 		if !strings.HasPrefix(scriptUrl, "http://") && !FileExists(scriptUrl) {
 			// 保存js文件
-			Info(i, "save js file:", scriptUrl)
+			Info("save js file:", scriptUrl)
 			//wg.Add(1)
 			//imageChannel <- 1
 			go saveFile(scriptUrl)
 		} else {
-			Warn(i, "special scriptUrl link:", scriptUrl)
+			Error("special scriptUrl link:", scriptUrl)
 		}
 	})
-	Info("all script")
 	// 解析引用的img
 	doc.Find("img[src]").Each(func(i int, s *goquery.Selection) {
-		Info("image src:", s)
 		imgUrl, _ := s.Attr("src")
 		// 保存文件
-		Info(i, "save image file:", imgUrl)
-		//wg.Add(1)
-		//imageChannel <- 1
+		Info("save image file:", imgUrl)
+		wg.Add(1)
+		imageChannel <- 1
 		go DownImg(imgUrl)
 	})
-	defer Info("img done")
 }
 
 //主程序
@@ -230,17 +237,10 @@ func main() {
 		Error(conf.ThemesUrl+conf.IndexUrl, " url2File error:", e)
 		panic(e.Error())
 	}
-	Info("aaa")
-	Info(doc)
-	Info("ccc")
 	saveHtmlDoc(doc)
-	Info("dddd")
-	Info("eee")
 	// 获取其他页
 	doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
-		Info(i, "main doc,each:", s)
 		url, _ := s.Attr("href")
-		Info("main save a:", url)
 		if url != "#" && url != "index.html" && strings.Contains(url, ".html") {
 			// 处理其他页
 			Info("main save other url:", url)
@@ -253,7 +253,7 @@ func main() {
 			}
 			saveHtmlDoc(doc)
 		} else {
-			Warn("main save a:", url)
+			Error("main save a:", url)
 		}
 	})
 	Info("waiting finish!")
